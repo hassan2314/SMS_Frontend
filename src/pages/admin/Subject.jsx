@@ -56,6 +56,11 @@ const AdminSubjects = () => {
         })
       );
 
+      // ✅ Sort by class name
+      subjectsWithAttendance.sort((a, b) =>
+        a.className.localeCompare(b.className)
+      );
+
       setSubjects(subjectsWithAttendance);
     } catch (err) {
       console.error("Error fetching subjects:", err);
