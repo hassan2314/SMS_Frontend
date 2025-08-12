@@ -12,6 +12,7 @@ import PublicRoute from "./PublicRoute";
 import UserProfile from "../pages/admin/UserProfile";
 import AddUser from "../pages/admin/AddUser";
 import AdminTeachers from "../pages/admin/Teacher";
+import AdminStudents from "../pages/admin/Students";
 
 const AppRouter = () => {
   return (
@@ -90,6 +91,17 @@ const AppRouter = () => {
           <ProtectedRoute allowedRoles={["ADMIN"]}>
             <AdminLayout>
               <AdminTeachers />
+            </AdminLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/students"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <AdminLayout>
+              <AdminStudents />
             </AdminLayout>
           </ProtectedRoute>
         }
