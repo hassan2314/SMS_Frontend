@@ -13,6 +13,8 @@ import UserProfile from "../pages/admin/UserProfile";
 import AddUser from "../pages/admin/AddUser";
 import AdminTeachers from "../pages/admin/Teacher";
 import AdminStudents from "../pages/admin/Students";
+import AdminSubjects from "../pages/admin/Subject";
+import EditSubject from "../pages/admin/EditSubject";
 
 const AppRouter = () => {
   return (
@@ -102,6 +104,26 @@ const AppRouter = () => {
           <ProtectedRoute allowedRoles={["ADMIN"]}>
             <AdminLayout>
               <AdminStudents />
+            </AdminLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/subjects"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <AdminLayout>
+              <AdminSubjects />
+            </AdminLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/edit/subjects/:id"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN"]}>
+            <AdminLayout>
+              <EditSubject />
             </AdminLayout>
           </ProtectedRoute>
         }

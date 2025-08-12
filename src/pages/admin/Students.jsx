@@ -17,7 +17,7 @@ import {
   Typography,
 } from "@mui/material";
 import { Delete, Visibility } from "@mui/icons-material";
-import axiosInstance from "../../utils/axiosInstance"; // your configured axios with interceptors
+import axiosInstance from "../../utils/axiosInstance";
 
 export default function AdminStudents() {
   const [students, setStudents] = useState([]);
