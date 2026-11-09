@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
+  Box,
   Container,
   Paper,
   Typography,
@@ -15,49 +16,80 @@ import { useDispatch } from "react-redux";
 import { login } from "../store/authSlice";
 import axios from "../utils/axiosInstance";
 import Logo from "../components/Logo";
+import { getErrorMessage, routeForRole, toPublicUser } from "../utils/authUser";
+
 const roles = ["TEACHER", "STUDENT"];
 
 const Signup = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { control, handleSubmit } = useForm();
 
   const createUser = async (data) => {
     setError("");
+    setSubmitting(true);
     try {
-      const res = await axios.post("/users/register", data);
-      const { accessToken, user } = res.data.data;
-      dispatch(login({ accessToken, user }));
-      navigate("/");
+      await axios.post("/users/register", data);
+      const res = await axios.post("/users/login", {
+        email: data.email,
+        password: data.password,
+      });
+      const user = toPublicUser(res.data?.data?.user);
+      dispatch(
+        login({ accessToken: res.data?.data?.accessToken, user })
+      );
+      navigate(routeForRole(user?.role));
     } catch (err) {
-      setError(err.response?.data?.message || err.message);
+      setError(getErrorMessage(err, "Could not create the account"));
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
+    <Box
+      sx={{
+        minHeight: "calc(100vh - 64px)",
+        display: "flex",
+        alignItems: "safe center",
+        py: 4,
+      }}
+    >
     <Container maxWidth="sm">
-      <Paper elevation={3} sx={{ p: 4, mt: 8 }}>
+      <Paper elevation={3} sx={{ p: { xs: 3, sm: 4 } }}>
         <Stack spacing={2} alignItems="center">
-          <Logo width="80" /> {/* your logo component */}
-          <Typography variant="h5" fontWeight="bold">
-            Sign up to create account
+          <Logo width="72" />
+          <Typography variant="h5" align="center">
+            Create an account
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Already have an account?{" "}
-            <Link to="/login" style={{ color: "#1976d2" }}>
+            <Link to="/login" style={{ color: "#1B4F72" }}>
               Sign in
             </Link>
           </Typography>
-          {error && <Alert severity="error">{error}</Alert>}
+          {error && (
+            <Alert severity="error" sx={{ width: "100%" }}>
+              {error}
+            </Alert>
+          )}
           <form onSubmit={handleSubmit(createUser)} style={{ width: "100%" }}>
             <Stack spacing={2}>
               <Controller
                 name="name"
                 control={control}
                 rules={{ required: "Name is required" }}
-                render={({ field }) => (
-                  <TextField {...field} label="Name" fullWidth required />
+                render={({ field, fieldState }) => (
+                  <TextField
+                    {...field}
+                    label="Name"
+                    fullWidth
+                    required
+                    error={!!fieldState.error}
+                    helperText={fieldState.error?.message}
+                  />
                 )}
               />
 
@@ -67,17 +99,20 @@ const Signup = () => {
                 rules={{
                   required: "Email is required",
                   pattern: {
-                    value: /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/,
+                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
                     message: "Invalid email format",
                   },
                 }}
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <TextField
                     {...field}
                     label="Email"
                     type="email"
+                    autoComplete="email"
                     fullWidth
                     required
+                    error={!!fieldState.error}
+                    helperText={fieldState.error?.message}
                   />
                 )}
               />
@@ -86,13 +121,16 @@ const Signup = () => {
                 name="password"
                 control={control}
                 rules={{ required: "Password is required" }}
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <TextField
                     {...field}
                     label="Password"
                     type="password"
+                    autoComplete="new-password"
                     fullWidth
                     required
+                    error={!!fieldState.error}
+                    helperText={fieldState.error?.message}
                   />
                 )}
               />
@@ -101,14 +139,16 @@ const Signup = () => {
                 name="dob"
                 control={control}
                 rules={{ required: "Date of birth is required" }}
-                render={({ field }) => (
+                render={({ field, fieldState }) => (
                   <TextField
                     {...field}
                     label="Date of Birth"
                     type="date"
                     fullWidth
-                    InputLabelProps={{ shrink: true }}
+                    slotProps={{ inputLabel: { shrink: true } }}
                     required
+                    error={!!fieldState.error}
+                    helperText={fieldState.error?.message}
                   />
                 )}
               />
@@ -117,8 +157,16 @@ const Signup = () => {
                 name="role"
                 control={control}
                 rules={{ required: "Role is required" }}
-                render={({ field }) => (
-                  <TextField {...field} label="Role" select fullWidth required>
+                render={({ field, fieldState }) => (
+                  <TextField
+                    {...field}
+                    label="Role"
+                    select
+                    fullWidth
+                    required
+                    error={!!fieldState.error}
+                    helperText={fieldState.error?.message}
+                  >
                     {roles.map((role) => (
                       <MenuItem key={role} value={role}>
                         {role}
@@ -128,14 +176,20 @@ const Signup = () => {
                 )}
               />
 
-              <Button variant="contained" type="submit" fullWidth>
-                Sign Up
+              <Button
+                variant="contained"
+                type="submit"
+                fullWidth
+                disabled={submitting}
+              >
+                {submitting ? "Creating account…" : "Sign up"}
               </Button>
             </Stack>
           </form>
         </Stack>
       </Paper>
     </Container>
+    </Box>
   );
 };
 

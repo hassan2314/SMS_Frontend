@@ -1,14 +1,12 @@
-import React from "react";
 import { useSelector } from "react-redux";
 import { Navigate } from "react-router-dom";
+import { routeForRole } from "../utils/authUser";
 
 const PublicRoute = ({ children }) => {
   const { user, status } = useSelector((state) => state.auth);
 
   if (status && user) {
-    console.log(user);
-    console.log(status);
-    return <Navigate to="/" replace />;
+    return <Navigate to={routeForRole(user.role)} replace />;
   }
 
   return children;

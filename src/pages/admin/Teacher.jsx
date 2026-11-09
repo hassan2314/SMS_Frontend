@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Box,
   Typography,
@@ -11,9 +11,9 @@ import {
   TableCell,
   TableBody,
   TableContainer,
-  Divider,
 } from "@mui/material";
 import axios from "../../utils/axiosInstance";
+import { getErrorMessage } from "../../utils/authUser";
 
 const AdminTeachers = () => {
   const [teachers, setTeachers] = useState([]);
@@ -21,30 +21,42 @@ const AdminTeachers = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [teachersRes, dropRes] = await Promise.all([
-        axios.get("/teachers"),
-        axios.get("/subjectDrops"),
-      ]);
-      setTeachers(teachersRes.data.data);
-      setDropRequests(dropRes.data.data);
-    } catch (err) {
-      setError("Failed to load teacher data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    let cancelled = false;
+
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [teachersRes, dropRes] = await Promise.all([
+          axios.get("/teachers"),
+          axios.get("/subjectDrops"),
+        ]);
+        if (cancelled) return;
+        setTeachers(teachersRes.data?.data || []);
+        setDropRequests(dropRes.data?.data || []);
+        setError("");
+      } catch (err) {
+        if (!cancelled) {
+          setError(getErrorMessage(err, "Failed to load teacher data"));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
     fetchData();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
-        Teachers & Drop Requests
+        Teachers
+      </Typography>
+      <Typography color="text.secondary" sx={{ mb: 3 }}>
+        Subject assignments and requests to drop a subject.
       </Typography>
 
       {loading ? (
@@ -52,13 +64,11 @@ const AdminTeachers = () => {
       ) : error ? (
         <Alert severity="error">{error}</Alert>
       ) : (
-        <>
-          {/* Teacher Overview */}
-          <Paper sx={{ p: 3, mb: 4 }}>
+        <Box display="flex" flexDirection="column" gap={3}>
+          <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
-              All Teachers
+              All teachers
             </Typography>
-            <Divider sx={{ my: 1 }} />
             <TableContainer>
               <Table>
                 <TableHead>
@@ -69,30 +79,36 @@ const AdminTeachers = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {teachers.map((teacher, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{teacher.user.name}</TableCell>
-                      <TableCell>{teacher.user.email}</TableCell>
+                  {teachers.map((teacher) => (
+                    <TableRow key={teacher.id}>
+                      <TableCell>{teacher.user?.name || "Unknown"}</TableCell>
+                      <TableCell>{teacher.user?.email || "—"}</TableCell>
                       <TableCell>
-                        {teacher.subjects.map((subj) => (
-                          <Typography key={subj.name}>
-                            {subj.name} ({subj.class?.name})
-                          </Typography>
-                        ))}
+                        {(teacher.subjects || []).length === 0
+                          ? "None assigned"
+                          : teacher.subjects.map((subj) => (
+                              <Typography key={subj.id || subj.name} variant="body2">
+                                {subj.name}
+                                {subj.class?.name ? ` (${subj.class.name})` : ""}
+                              </Typography>
+                            ))}
                       </TableCell>
                     </TableRow>
                   ))}
+                  {teachers.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3}>No teachers found</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           </Paper>
 
-          {/* Drop Requests */}
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
-              Subject Drop Requests
+              Subject drop requests
             </Typography>
-            <Divider sx={{ my: 1 }} />
             <TableContainer>
               <Table>
                 <TableHead>
@@ -104,19 +120,24 @@ const AdminTeachers = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {dropRequests.map((req, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{req.teacher.user.name}</TableCell>
-                      <TableCell>{req.teacher.user.email}</TableCell>
-                      <TableCell>{req.subject.name}</TableCell>
+                  {dropRequests.map((req) => (
+                    <TableRow key={req.id}>
+                      <TableCell>{req.teacher?.user?.name || "Unknown"}</TableCell>
+                      <TableCell>{req.teacher?.user?.email || "—"}</TableCell>
+                      <TableCell>{req.subject?.name || "—"}</TableCell>
                       <TableCell>{req.status}</TableCell>
                     </TableRow>
                   ))}
+                  {dropRequests.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4}>No drop requests</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </TableContainer>
           </Paper>
-        </>
+        </Box>
       )}
     </Box>
   );

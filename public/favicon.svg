@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="School Management">
+  <rect width="32" height="32" rx="7" fill="#1B4F72"/>
+  <path fill="#ffffff" d="M6 14.2 16 7l10 7.2V25H6V14.2z"/>
+  <path fill="#1B4F72" d="M14 18h4v7h-4z"/>
+  <path fill="#148F77" d="M8.5 14.8h15v1.6h-15z"/>
+</svg>

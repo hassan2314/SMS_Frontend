@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   CircularProgress,
@@ -15,9 +16,13 @@ import {
   TableRow,
   TextField,
   Typography,
+  Paper,
 } from "@mui/material";
 import { Delete, Visibility } from "@mui/icons-material";
-import axiosInstance from "../../utils/axiosInstance"; // your configured axios with interceptors
+import axiosInstance from "../../utils/axiosInstance";
+import { getErrorMessage } from "../../utils/authUser";
+
+const PAGE_SIZE = 8;
 
 export default function AdminStudents() {
   const [students, setStudents] = useState([]);
@@ -26,32 +31,21 @@ export default function AdminStudents() {
   const [classes, setClasses] = useState([]);
   const [filterClass, setFilterClass] = useState("");
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-
+  const [error, setError] = useState("");
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState("");
 
   const fetchStudents = async () => {
     setLoading(true);
     try {
-      const res = await axiosInstance.get("/students", {
-        params: {
-          search,
-          classId: filterClass,
-          page,
-          limit: 10,
-        },
-      });
-
-      // students come from res.data.data
-      const students = res?.data?.data ?? [];
-
-      setStudents(Array.isArray(students) ? students : []);
-
-      // if your backend doesn't send totalPages yet, set a default
-      setTotalPages(res?.data?.totalPages ?? 1);
+      const res = await axiosInstance.get("/students");
+      const rows = res?.data?.data ?? [];
+      setStudents(Array.isArray(rows) ? rows : []);
+      setError("");
     } catch (err) {
-      console.error("Error fetching students:", err);
       setStudents([]);
+      setError(getErrorMessage(err, "Could not load students"));
     } finally {
       setLoading(false);
     }
@@ -60,38 +54,45 @@ export default function AdminStudents() {
   const fetchClasses = async () => {
     try {
       const res = await axiosInstance.get("/classes");
-      setClasses(res.data.data);
-      //   console.log(res.data.data);
+      const rows = res?.data?.data;
+      setClasses(Array.isArray(rows) ? rows : []);
     } catch (err) {
-      console.error(err);
+      setClasses([]);
+      setError(getErrorMessage(err, "Could not load classes"));
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this student?"))
-      return;
+  const handleDelete = async (student) => {
+    if (!window.confirm("Delete this student and their login?")) return;
     try {
-      await axiosInstance.delete(`/students/${id}`);
+      await axiosInstance.delete(`/admin/users/${student.userId}`);
+      setError("");
       fetchStudents();
     } catch (err) {
-      console.error(err);
+      setError(getErrorMessage(err, "Could not delete the student"));
     }
   };
 
   const handleAssignClass = async (studentId, classId) => {
     try {
-      await axiosInstance.patch(`/students/${studentId}`, { classId });
+      await axiosInstance.put(`/teachers/${studentId}/update-class`, {
+        classId: classId || null,
+      });
+      setError("");
       fetchStudents();
     } catch (err) {
-      console.error(err);
+      setError(getErrorMessage(err, "Could not update the class"));
     }
   };
 
-  const handleViewProfile = async (id) => {
+  const handleViewProfile = async (student) => {
+    setProfileError("");
+    setProfileLoading(true);
+    setSelectedStudent(student);
     try {
       const [profileRes, attendanceRes] = await Promise.all([
-        axiosInstance.get(`/students/${id}`),
-        axiosInstance.get(`/attendances/${id}`), // example endpoint
+        axiosInstance.get(`/students/${student.id}`),
+        axiosInstance.get(`/attendances/${student.id}`),
       ]);
 
       setSelectedStudent({
@@ -99,23 +100,62 @@ export default function AdminStudents() {
         attendance: attendanceRes.data.data,
       });
     } catch (err) {
-      console.error(err);
+      setProfileError(getErrorMessage(err, "Could not load this profile"));
+    } finally {
+      setProfileLoading(false);
     }
   };
 
   useEffect(() => {
     fetchStudents();
     fetchClasses();
-  }, [search, filterClass, page]);
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterClass]);
+
+  const classNameById = useMemo(() => {
+    const map = new Map();
+    classes.forEach((item) => map.set(item.id, item.name));
+    return map;
+  }, [classes]);
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return students.filter((student) => {
+      const name = student.user?.name?.toLowerCase() || "";
+      const email = student.user?.email?.toLowerCase() || "";
+      const matchesQuery =
+        !query || name.includes(query) || email.includes(query);
+      const matchesClass = !filterClass || student.classId === filterClass;
+      return matchesQuery && matchesClass;
+    });
+  }, [students, search, filterClass]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const visible = filtered.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   return (
-    <Box p={2}>
-      <Typography variant="h5" mb={2}>
-        Manage Students
+    <Box>
+      <Typography variant="h4" mb={0.5}>
+        Students
+      </Typography>
+      <Typography color="text.secondary" mb={2}>
+        Search the roll, assign a class, or open a profile.
       </Typography>
 
-      {/* Search and filter */}
-      <Box display="flex" gap={2} mb={2}>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
+          {error}
+        </Alert>
+      )}
+
+      <Box display="flex" gap={2} mb={2} flexWrap="wrap">
         <TextField
           label="Search by name or email"
           variant="outlined"
@@ -128,42 +168,35 @@ export default function AdminStudents() {
           onChange={(e) => setFilterClass(e.target.value)}
           displayEmpty
           size="small"
+          sx={{ minWidth: 180, bgcolor: "background.paper" }}
         >
-          <MenuItem value="">All Classes</MenuItem>
+          <MenuItem value="">All classes</MenuItem>
           {classes.map((cls) => (
             <MenuItem key={cls.id} value={cls.id}>
               {cls.name}
             </MenuItem>
           ))}
         </Select>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={() => alert("Import CSV feature coming soon")}
-        >
-          Import CSV
-        </Button>
       </Box>
 
-      {/* Table */}
       {loading ? (
         <CircularProgress />
       ) : (
-        <TableContainer>
+        <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
                 <TableCell>Name</TableCell>
                 <TableCell>Email</TableCell>
                 <TableCell>Class</TableCell>
-                <TableCell>Actions</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {students.map((student) => (
+              {visible.map((student) => (
                 <TableRow key={student.id}>
-                  <TableCell>{student.user.name}</TableCell>
-                  <TableCell>{student.user.email}</TableCell>
+                  <TableCell>{student.user?.name || "Unknown"}</TableCell>
+                  <TableCell>{student.user?.email || "—"}</TableCell>
                   <TableCell>
                     <Select
                       value={student.classId || ""}
@@ -171,6 +204,8 @@ export default function AdminStudents() {
                         handleAssignClass(student.id, e.target.value)
                       }
                       size="small"
+                      displayEmpty
+                      sx={{ minWidth: 160 }}
                     >
                       <MenuItem value="">Unassigned</MenuItem>
                       {classes.map((cls) => (
@@ -178,25 +213,27 @@ export default function AdminStudents() {
                           {cls.name}
                         </MenuItem>
                       ))}
-                    </Select>
+                      </Select>
                   </TableCell>
-                  <TableCell>
+                  <TableCell align="right">
                     <IconButton
                       color="primary"
-                      onClick={() => handleViewProfile(student.id)}
+                      aria-label={`View ${student.user?.name || "student"}`}
+                      onClick={() => handleViewProfile(student)}
                     >
                       <Visibility />
                     </IconButton>
                     <IconButton
                       color="error"
-                      onClick={() => handleDelete(student.id)}
+                      aria-label={`Delete ${student.user?.name || "student"}`}
+                      onClick={() => handleDelete(student)}
                     >
                       <Delete />
                     </IconButton>
                   </TableCell>
                 </TableRow>
               ))}
-              {students.length === 0 && (
+              {visible.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4}>No students found</TableCell>
                 </TableRow>
@@ -206,23 +243,24 @@ export default function AdminStudents() {
         </TableContainer>
       )}
 
-      {/* Pagination */}
-      <Box mt={2}>
-        <Button disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
-          Prev
-        </Button>
-        <span style={{ margin: "0 8px" }}>
-          Page {page} of {totalPages}
-        </span>
+      <Box mt={2} display="flex" alignItems="center">
         <Button
-          disabled={page === totalPages}
+          disabled={currentPage === 1}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          Previous
+        </Button>
+        <Typography sx={{ mx: 1 }} variant="body2">
+          Page {currentPage} of {totalPages}
+        </Typography>
+        <Button
+          disabled={currentPage === totalPages}
           onClick={() => setPage((p) => p + 1)}
         >
           Next
         </Button>
       </Box>
 
-      {/* Profile Modal */}
       <Modal open={!!selectedStudent} onClose={() => setSelectedStudent(null)}>
         <Box
           sx={{
@@ -232,40 +270,51 @@ export default function AdminStudents() {
             transform: "translate(-50%, -50%)",
             bgcolor: "background.paper",
             p: 3,
-            width: 400,
+            width: { xs: "90%", sm: 420 },
             borderRadius: 2,
           }}
         >
-          {selectedStudent ? (
+          {profileLoading ? (
+            <CircularProgress />
+          ) : (
             <>
               <Typography variant="h6" mb={2}>
-                {selectedStudent.user?.name}
+                {selectedStudent?.user?.name || "Student"}
               </Typography>
-              <Typography>Email: {selectedStudent.user?.email}</Typography>
+              {profileError && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {profileError}
+                </Alert>
+              )}
+              <Typography>Email: {selectedStudent?.user?.email || "—"}</Typography>
               <Typography>
-                Class: {selectedStudent.class?.name || "N/A"}
+                Class:{" "}
+                {selectedStudent?.class?.name ||
+                  classNameById.get(selectedStudent?.classId) ||
+                  "Unassigned"}
               </Typography>
-              selectedStudent
-              <Typography>
-                Joined:{" "}
-                {new Date(selectedStudent.user?.createdAt).toLocaleDateString()}
-              </Typography>
-              {/* Attendance Summary */}
-              {selectedStudent.attendance && (
+              {selectedStudent?.user?.createdAt && (
+                <Typography>
+                  Joined:{" "}
+                  {new Date(selectedStudent.user.createdAt).toLocaleDateString()}
+                </Typography>
+              )}
+              {selectedStudent?.attendance && (
                 <Box mt={2}>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    Attendance Summary
+                  <Typography variant="subtitle1" fontWeight={700}>
+                    Attendance
                   </Typography>
                   <Typography>
-                    Present: {selectedStudent.attendance.present} /{" "}
-                    {selectedStudent.attendance.total} (
-                    {selectedStudent.attendance.percentage}%)
+                    Present: {selectedStudent.attendance.present ?? 0} /{" "}
+                    {selectedStudent.attendance.total ?? 0} (
+                    {selectedStudent.attendance.percentage ?? 0}%)
                   </Typography>
                 </Box>
               )}
+              <Box mt={2} display="flex" justifyContent="flex-end">
+                <Button onClick={() => setSelectedStudent(null)}>Close</Button>
+              </Box>
             </>
-          ) : (
-            <CircularProgress />
           )}
         </Box>
       </Modal>
