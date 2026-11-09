@@ -16,21 +16,29 @@ const UserProfile = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const fetchUserDetails = async () => {
-    try {
-      setLoading(true);
-      const userRes = await axios.get(`admin/users/${id}`);
-      setUser(userRes.data.data);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load user profile");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    let cancelled = false;
+
+    const fetchUserDetails = async () => {
+      try {
+        setLoading(true);
+        const userRes = await axios.get(`admin/users/${id}`);
+        if (!cancelled) {
+          setUser(userRes.data.data);
+          setError("");
+        }
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) setError("Failed to load user profile");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
     fetchUserDetails();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   if (loading) return <CircularProgress />;
@@ -96,8 +104,9 @@ const UserProfile = () => {
           <Typography variant="h6">Teacher Info</Typography>
           <Divider sx={{ my: 1 }} />
           <Typography>
-            Subjects Teach:{" "}
-            {user.teacher.subjects.map((s) => s.name).join(", ") || "N/A"}
+            Subjects:{" "}
+            {(user.teacher.subjects || []).map((s) => s.name).join(", ") ||
+              "None assigned"}
           </Typography>
           <Typography>
             Assignments Pushed: {user.teacher.assignmentCount}

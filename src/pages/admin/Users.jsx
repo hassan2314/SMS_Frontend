@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Box,
   Typography,
@@ -22,13 +22,14 @@ import {
   DialogContentText,
   DialogActions,
   Button,
+  Link,
 } from "@mui/material";
 
 import DeleteIcon from "@mui/icons-material/Delete";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import axios from "../../utils/axiosInstance";
 import { Link as RouterLink } from "react-router-dom";
-import { Link } from "@mui/material";
+import { getErrorMessage } from "../../utils/authUser";
 
 const Users = () => {
   const [users, setUsers] = useState([]);
@@ -46,8 +47,9 @@ const Users = () => {
       setLoading(true);
       const res = await axios.get("/admin/users");
       setUsers(res.data.data || []);
+      setError("");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to load users");
+      setError(getErrorMessage(err, "Failed to load users"));
     } finally {
       setLoading(false);
     }
@@ -60,7 +62,7 @@ const Users = () => {
         prev.map((user) => (user.id === id ? { ...user, role: newRole } : user))
       );
     } catch (err) {
-      alert("Failed to update role");
+      setError(getErrorMessage(err, "Failed to update role"));
     }
   };
 
@@ -71,7 +73,7 @@ const Users = () => {
       await axios.delete(`/admin/users/${id}`);
       setUsers((prev) => prev.filter((user) => user.id !== id));
     } catch (err) {
-      alert("Failed to delete user");
+      setError(getErrorMessage(err, "Failed to delete user"));
     }
   };
 
@@ -82,10 +84,19 @@ const Users = () => {
       setSelectedStudent(user);
       setAttendanceDialogOpen(true);
 
-      const res = await axios.get(`/attendances/${user.id}`);
-      setAttendanceData(res.data.data); // expecting { percentage: 80.5 }
+      const studentsRes = await axios.get("/students");
+      const match = (studentsRes.data?.data || []).find(
+        (student) => student.userId === user.id
+      );
+      if (!match) {
+        setAttendanceError("This account does not have a student record.");
+        return;
+      }
+
+      const res = await axios.get(`/attendances/${match.id}`);
+      setAttendanceData(res.data.data);
     } catch (err) {
-      setAttendanceError("Failed to fetch attendance");
+      setAttendanceError(getErrorMessage(err, "Failed to fetch attendance"));
     }
   };
 
@@ -105,25 +116,38 @@ const Users = () => {
           justifyContent: "space-between",
           alignItems: "center",
           mb: 2,
+          gap: 2,
+          flexWrap: "wrap",
         }}
       >
-        <Typography variant="h4">Manage Users</Typography>
+        <Box>
+          <Typography variant="h4">Users</Typography>
+          <Typography color="text.secondary">
+            Accounts that can sign in to the school.
+          </Typography>
+        </Box>
 
         <Button
           variant="contained"
           component={RouterLink}
-          to="/admin/addUser"
+          to="/admin/add-user"
           color="primary"
         >
-          Add User
+          Add user
         </Button>
       </Box>
 
-      <FormControl sx={{ mb: 2, minWidth: 200 }}>
-        <InputLabel>Filter by Role</InputLabel>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
+          {error}
+        </Alert>
+      )}
+
+      <FormControl sx={{ mb: 2, minWidth: 200 }} size="small">
+        <InputLabel>Filter by role</InputLabel>
         <Select
           value={filterRole}
-          label="Filter by Role"
+          label="Filter by role"
           onChange={(e) => setFilterRole(e.target.value)}
         >
           <MenuItem value="">All</MenuItem>
@@ -135,8 +159,6 @@ const Users = () => {
 
       {loading ? (
         <CircularProgress />
-      ) : error ? (
-        <Alert severity="error">{error}</Alert>
       ) : (
         <TableContainer component={Paper}>
           <Table>
@@ -152,22 +174,15 @@ const Users = () => {
               {filteredUsers.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
-                    <Typography>
-                      <Link
-                        component={RouterLink}
-                        to={`/admin/users/${user.id}`}
-                      >
-                        {user.name}
-                      </Link>
-                    </Typography>
+                    <Link component={RouterLink} to={`/admin/users/${user.id}`}>
+                      {user.name}
+                    </Link>
                   </TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
                     <Select
                       value={user.role}
-                      onChange={(e) =>
-                        handleRoleChange(user.id, e.target.value)
-                      }
+                      onChange={(e) => handleRoleChange(user.id, e.target.value)}
                       size="small"
                     >
                       <MenuItem value="STUDENT">Student</MenuItem>
@@ -179,6 +194,7 @@ const Users = () => {
                     {user.role === "STUDENT" && (
                       <IconButton
                         color="primary"
+                        aria-label={`Attendance for ${user.name}`}
                         onClick={() => handleViewAttendance(user)}
                       >
                         <VisibilityIcon />
@@ -186,6 +202,7 @@ const Users = () => {
                     )}
                     <IconButton
                       color="error"
+                      aria-label={`Delete ${user.name}`}
                       onClick={() => handleDelete(user.id)}
                     >
                       <DeleteIcon />
@@ -205,20 +222,21 @@ const Users = () => {
         </TableContainer>
       )}
 
-      {/* Attendance Dialog */}
       <Dialog
         open={attendanceDialogOpen}
         onClose={() => setAttendanceDialogOpen(false)}
       >
-        <DialogTitle>Attendance Details</DialogTitle>
+        <DialogTitle>Attendance</DialogTitle>
         <DialogContent>
           {attendanceError ? (
             <Alert severity="error">{attendanceError}</Alert>
           ) : attendanceData ? (
             <DialogContentText>
-              <strong>{selectedStudent?.name}'s Attendance:</strong>
-              <br />
-              {attendanceData.percentage}% present
+              {selectedStudent?.name} is present{" "}
+              {attendanceData.percentage ?? 0}% of the time
+              {typeof attendanceData.present === "number" &&
+                ` (${attendanceData.present} of ${attendanceData.total})`}
+              .
             </DialogContentText>
           ) : (
             <CircularProgress />

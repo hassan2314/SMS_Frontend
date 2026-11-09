@@ -1,9 +1,10 @@
-import React from "react";
-import { AppBar, Toolbar, Typography, Button, Stack } from "@mui/material";
+import { AppBar, Toolbar, Typography, Button, Stack, Box } from "@mui/material";
 import { Link, useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../../store/authSlice";
 import axios from "../../utils/axiosInstance";
+import { routeForRole } from "../../utils/authUser";
+import Logo from "../Logo";
 
 const Navbar = () => {
   const dispatch = useDispatch();
@@ -13,30 +14,40 @@ const Navbar = () => {
   const handleLogout = async () => {
     try {
       await axios.post("/users/logout");
+    } catch {
+      // Clear the local session even if the token is already expired.
+    } finally {
       dispatch(logout());
       navigate("/login");
-    } catch (error) {
-      console.error("Logout failed:", error.message);
     }
   };
 
   return (
-    <AppBar position="static" color="primary">
-      <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
-        <Typography
-          variant="h6"
+    <AppBar position="sticky" color="primary">
+      <Toolbar sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+        <Box
           component={Link}
-          to="/"
-          sx={{ textDecoration: "none", color: "inherit", fontWeight: "bold" }}
+          to={status ? routeForRole(user?.role) : "/login"}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.25,
+            textDecoration: "none",
+            color: "inherit",
+            minWidth: 0,
+          }}
         >
-          School Management
-        </Typography>
+          <Logo width="32" />
+          <Typography variant="h6" noWrap sx={{ fontWeight: 700 }}>
+            School Management
+          </Typography>
+        </Box>
 
-        <Stack direction="row" spacing={2}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
           {status ? (
             <>
-              <Typography paddingTop={1} variant="body1">
-                Hi, {user?.name}
+              <Typography variant="body2" noWrap>
+                {user?.name}
               </Typography>
               <Button color="inherit" onClick={handleLogout}>
                 Logout

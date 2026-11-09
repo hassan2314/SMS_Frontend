@@ -1,4 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit";
+import { toPublicUser } from "../utils/authUser";
 
 const initialState = {
   status: false,
@@ -11,9 +12,10 @@ export const authSlice = createSlice({
   initialState,
   reducers: {
     login: (state, action) => {
-      state.status = true;
-      state.accessToken = action.payload.accessToken;
-      state.user = action.payload.user;
+      const user = toPublicUser(action.payload?.user);
+      state.accessToken = action.payload?.accessToken ?? null;
+      state.user = user;
+      state.status = Boolean(state.accessToken && user);
     },
     logout: (state) => {
       state.status = false;
